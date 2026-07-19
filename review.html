@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>복습 반복듣기 (여러 문장)</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --accent: #6366f1;
+    --accent-2: #818cf8;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --line: #334155;
+    --ok: #22c55e;
+    --stop: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Malgun Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+  .wrap { width: 100%; max-width: 620px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  textarea, input[type="number"], select {
+    width: 100%;
+    background: #0b1220;
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 16px;
+    font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 70px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 120px; }
+  .slider-val { color: var(--accent-2); font-weight: 600; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .btns { display: flex; gap: 12px; margin-top: 4px; }
+  button {
+    flex: 1;
+    border: none;
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 17px;
+    font-weight: 700;
+    cursor: pointer;
+    color: #fff;
+    transition: transform .05s, opacity .2s;
+  }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  #play { background: var(--accent); }
+  #stop { background: var(--stop); }
+  .progress {
+    text-align: center;
+    margin-top: 18px;
+    font-size: 15px;
+    color: var(--muted);
+  }
+  .count-big {
+    font-size: 44px;
+    font-weight: 800;
+    color: var(--accent-2);
+    line-height: 1.1;
+  }
+  .bar {
+    height: 8px;
+    background: #0b1220;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 12px;
+  }
+  .bar > div { height: 100%; width: 0%; background: var(--ok); transition: width .2s; }
+  .mt { margin-top: 16px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔁 복습 반복듣기</h1>
+  <p class="sub">문장과 횟수를 정하면, 여러 문장을 한 줄에 하나씩 넣으면, 1번 문장을 정한 횟수만큼 반복한 뒤 자동으로 2번 문장으로 넘어가요.</p>
+
+  <div class="card">
+    <label for="text">반복할 문장 (한 줄에 하나씩 · 해석은 | 뒤에)</label>
+    <textarea id="text" rows="4" placeholder="영어문장 | 한글해석  (해석은 생략 가능)">I would like to order a coffee, please. | 커피 한 잔 주문할게요.</textarea>
+
+    <div class="row mt">
+      <div>
+        <label for="count">문장당 반복 횟수</label>
+        <input type="number" id="count" min="1" max="999" value="10">
+      </div>
+      <div>
+        <label for="voice">음성</label>
+        <select id="voice"></select>
+      </div>
+    </div>
+
+    <div class="mt">
+      <label>속도 <span class="slider-val" id="rateVal">1.0x</span></label>
+      <input type="range" id="rate" min="0.5" max="1.5" step="0.1" value="1">
+    </div>
+
+    <div class="mt">
+      <label>문장 사이 간격 <span class="slider-val" id="gapVal">0.8초</span></label>
+      <input type="range" id="gap" min="0" max="4" step="0.2" value="0.8">
+    </div>
+
+    <div class="btns mt">
+      <button id="play">▶ 시작</button>
+      <button id="stop" disabled>■ 정지</button>
+    </div>
+    <p class="hint">팁: 화면을 꺼도 소리가 멈추지 않게 하려면 휴대폰 자동잠금을 잠시 꺼두세요.</p>
+  </div>
+
+  <div class="card progress">
+    <div id="nowSentence" style="font-size:15px;color:#e2e8f0;margin-bottom:8px;min-height:20px;line-height:1.4;"></div>
+    <div class="count-big"><span id="done">0</span> / <span id="total">10</span></div>
+    <div>현재 문장 반복</div>
+    <div id="sentInfo" style="margin-top:6px;font-size:13px;color:#94a3b8;"></div>
+    <div class="bar"><div id="barFill"></div></div>
+  </div>
+</div>
+
+<script>
+  const synth = window.speechSynthesis;
+  const $ = id => document.getElementById(id);
+  const textEl = $('text'), countEl = $('count'), voiceEl = $('voice');
+  const rateEl = $('rate'), gapEl = $('gap');
+  const rateVal = $('rateVal'), gapVal = $('gapVal');
+  const playBtn = $('play'), stopBtn = $('stop');
+  const doneEl = $('done'), totalEl = $('total'), barFill = $('barFill');
+  const nowSentence = $('nowSentence'), sentInfo = $('sentInfo');
+  const esc = s => (s || '').replace(/</g, '&lt;');
+
+  let voices = [];
+  let forcedLang = null; // 'en-GB'(영국) 또는 'en-US'(미국)
+  let running = false;
+  let sentences = [];  // 영어 문장(읽는 것)
+  let trans = [];      // 한글 해석(보여주는 것)
+  let si = 0;          // 현재 문장 index
+  let ri = 0;          // 현재 문장 완료 반복 수
+  let target = 0;      // 문장당 반복 횟수
+  let timer = null;
+
+  function loadVoices() {
+    voices = synth.getVoices();
+    // 영어 음성 우선 정렬
+    const en = voices.filter(v => v.lang.startsWith('en'));
+    const others = voices.filter(v => !v.lang.startsWith('en'));
+    const ordered = [...en, ...others];
+    voiceEl.innerHTML = '';
+    ordered.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v.name;
+      o.textContent = `${v.name} (${v.lang})`;
+      voiceEl.appendChild(o);
+    });
+    // 기본값 선택: forcedLang(en-GB/en-US)이 있으면 그 언어 우선
+    let pick = null;
+    if (forcedLang) {
+      pick = ordered.find(v => v.lang === forcedLang) ||
+             ordered.find(v => v.lang.replace('_','-').toLowerCase() === forcedLang.toLowerCase());
+    }
+    if (!pick) pick = ordered.find(v => v.lang === 'en-US') || ordered.find(v => v.lang.startsWith('en'));
+    if (pick) voiceEl.value = pick.name;
+  }
+  loadVoices();
+  if (synth.onvoiceschanged !== undefined) synth.onvoiceschanged = loadVoices;
+
+  rateEl.oninput = () => rateVal.textContent = parseFloat(rateEl.value).toFixed(1) + 'x';
+  gapEl.oninput  = () => gapVal.textContent  = parseFloat(gapEl.value).toFixed(1) + '초';
+  countEl.oninput = () => totalEl.textContent = countEl.value || 0;
+
+  function updateProgress() {
+    doneEl.textContent = ri;
+    totalEl.textContent = target;
+    const total = (sentences.length * target) || 1;
+    const done = si * target + ri;
+    barFill.style.width = (done / total * 100) + '%';
+    if (sentences.length) {
+      const idx = Math.min(si, sentences.length - 1);
+      const ko = trans[idx];
+      nowSentence.innerHTML = '<div style="font-weight:600;">▶ ' + esc(sentences[idx]) + '</div>' +
+        (ko ? '<div style="color:#94a3b8;font-size:14px;margin-top:3px;">' + esc(ko) + '</div>' : '');
+      sentInfo.textContent = '문장 ' + Math.min(si + 1, sentences.length) + ' / ' + sentences.length;
+    }
+  }
+
+  function speakOnce() {
+    if (!running) return;
+    if (si >= sentences.length) { finish(); return; }
+    const u = new SpeechSynthesisUtterance(sentences[si]);
+    const v = voices.find(x => x.name === voiceEl.value);
+    if (v) { u.voice = v; u.lang = v.lang; }
+    u.rate = parseFloat(rateEl.value);
+    u.onend = () => {
+      if (!running) return;
+      ri++;
+      updateProgress();
+      const gapMs = parseFloat(gapEl.value) * 1000;
+      if (ri >= target) {          // 이 문장 반복 끝 → 다음 문장으로
+        si++;
+        ri = 0;
+        if (si >= sentences.length) { finish(); return; }
+        updateProgress();
+        timer = setTimeout(speakOnce, gapMs + 500); // 문장 바뀔 때 살짝 더 쉼
+      } else {
+        timer = setTimeout(speakOnce, gapMs);
+      }
+    };
+    u.onerror = () => { if (running) finish(); };
+    synth.speak(u);
+  }
+
+  function start() {
+    const lines = textEl.value.split('\n').map(s => s.trim()).filter(s => s.length);
+    sentences = []; trans = [];
+    lines.forEach(line => {
+      const parts = line.split('|');
+      sentences.push(parts[0].trim());
+      trans.push((parts[1] || '').trim());
+    });
+    target = parseInt(countEl.value, 10);
+    if (!sentences.length) { alert('문장을 입력해 주세요.'); return; }
+    if (!target || target < 1) { alert('반복 횟수를 1 이상으로 입력해 주세요.'); return; }
+    synth.cancel();
+    running = true;
+    si = 0; ri = 0;
+    updateProgress();
+    playBtn.disabled = true;
+    stopBtn.disabled = false;
+    speakOnce();
+  }
+
+  function finish() {
+    running = false;
+    clearTimeout(timer);
+    synth.cancel();
+    playBtn.disabled = false;
+    stopBtn.disabled = true;
+    if (sentences.length && si >= sentences.length) {
+      nowSentence.textContent = '✅ 모두 완료!';
+      barFill.style.width = '100%';
+    }
+  }
+
+  playBtn.onclick = start;
+  stopBtn.onclick = finish;
+  totalEl.textContent = countEl.value;
+
+  // --- URL 파라미터로 문장/횟수 받기 (Claude 링크 연동용) ---
+  // 예: repeat-speaker.html?text=Hello&count=30&rate=1&gap=0.8&auto=1
+  (function () {
+    const p = new URLSearchParams(location.search);
+    if (p.has('text')) {
+      // text= 는 영어 문장, ko= 는 같은 순서의 한글 해석
+      const en = p.getAll('text');
+      const ko = p.getAll('ko');
+      textEl.value = en.map((t, i) => ko[i] ? t + ' | ' + ko[i] : t).join('\n');
+    }
+    if (p.has('count')) { countEl.value = p.get('count'); totalEl.textContent = p.get('count'); }
+    if (p.has('rate'))  { rateEl.value = p.get('rate'); rateVal.textContent = parseFloat(p.get('rate')).toFixed(1) + 'x'; }
+    if (p.has('gap'))   { gapEl.value = p.get('gap');  gapVal.textContent = parseFloat(p.get('gap')).toFixed(1) + '초'; }
+    if (p.has('lang'))  { forcedLang = p.get('lang'); loadVoices(); } // en-GB(영국) / en-US(미국)
+
+    // auto=1 이면 한 번만 탭하면 바로 시작하도록 안내 오버레이 표시
+    // (모바일 브라우저는 사용자 탭 없이는 소리 재생을 막기 때문)
+    if (p.get('auto') === '1') {
+      const ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.96);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:99;text-align:center;padding:24px;';
+      const lines = textEl.value.split('\n').map(s => s.trim()).filter(Boolean);
+      const listHtml = lines.map(l => {
+        const parts = l.split('|');
+        const en = '<div style="font-size:19px;font-weight:700;">' + esc(parts[0].trim()) + '</div>';
+        const ko = parts[1] ? '<div style="font-size:14px;font-weight:400;color:#94a3b8;">' + esc(parts[1].trim()) + '</div>' : '';
+        return '<div style="margin:6px 0;">' + en + ko + '</div>';
+      }).join('');
+      ov.innerHTML = '<div style="font-size:18px;color:#94a3b8;max-width:420px;">' +
+        (lines.length > 1 ? lines.length + '개 문장을 각각 ' : '아래 문장을 ') +
+        countEl.value + '회 반복합니다</div>' +
+        '<div style="max-width:480px;line-height:1.5;">' + listHtml + '</div>' +
+        '<button style="background:#6366f1;color:#fff;border:none;border-radius:14px;padding:18px 34px;font-size:20px;font-weight:800;cursor:pointer;">▶ 탭하여 시작</button>';
+      ov.querySelector('button').onclick = () => { ov.remove(); start(); };
+      document.body.appendChild(ov);
+    }
+  })();
+</script>
+</body>
+</html>
