@@ -314,7 +314,7 @@
         timer = setTimeout(speakOnce, gapMs);
       }
     };
-    u.onerror = () => { if (running) finish(); };
+    u.onerror = () => { if (running && !paused) finish(); };
     synth.speak(u);
   }
 
@@ -363,13 +363,12 @@
     if (!paused) {
       paused = true;
       clearTimeout(timer);          // 문장 사이 간격 중이면 멈춤
-      try { synth.pause(); } catch (e) {}
+      try { synth.cancel(); } catch (e) {} // 현재 문장 중단 (resume 대신 취소 방식)
       pauseBtn.textContent = '▶ 계속';
     } else {
       paused = false;
       pauseBtn.textContent = '⏸ 일시정지';
-      if (synth.paused) { try { synth.resume(); } catch (e) {} } // 문장 도중이었으면 이어서
-      else { speakOnce(); }         // 간격 중이었으면 다음 재생 시작
+      speakOnce();                  // 현재 문장부터 다시 재생 (크롬 resume 버그 회피)
     }
   }
 
