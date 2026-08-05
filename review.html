@@ -101,6 +101,10 @@
   <div class="card">
     <label for="text">반복할 문장 (한 줄에 하나씩 · 해석은 | 뒤에)</label>
     <textarea id="text" rows="4" placeholder="영어문장 | 한글해석  (해석은 생략 가능)">I would like to order a coffee, please. | 커피 한 잔 주문할게요.</textarea>
+    <div class="mt" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <label for="file" style="margin:0;">📄 파일 불러오기 (.txt)</label>
+      <input type="file" id="file" accept=".txt,.csv,text/plain" style="color:var(--muted);font-size:13px;flex:1;min-width:140px;">
+    </div>
 
     <div class="row mt">
       <div>
@@ -110,6 +114,17 @@
       <div>
         <label for="voice">음성</label>
         <select id="voice"></select>
+      </div>
+    </div>
+
+    <div class="row mt">
+      <div style="display:flex;align-items:center;gap:8px;flex:0 0 auto;">
+        <input type="checkbox" id="shuffle" style="width:18px;height:18px;">
+        <label for="shuffle" style="margin:0;">🔀 랜덤 섞기</label>
+      </div>
+      <div>
+        <label for="limit">문장 수 제한 (0 = 전체)</label>
+        <input type="number" id="limit" min="0" max="999" value="0">
       </div>
     </div>
 
@@ -148,7 +163,31 @@
   const playBtn = $('play'), stopBtn = $('stop');
   const doneEl = $('done'), totalEl = $('total'), barFill = $('barFill');
   const nowSentence = $('nowSentence'), sentInfo = $('sentInfo');
+  const fileEl = $('file'), shuffleEl = $('shuffle'), limitEl = $('limit');
   const esc = s => (s || '').replace(/</g, '&lt;');
+
+  // 파일 불러오기: 내용을 문장 칸에 채움
+  fileEl.addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      textEl.value = String(r.result).trim();
+      const n = textEl.value.split('\n').filter(s => s.trim()).length;
+      sentInfo.textContent = '📄 ' + n + '개 문장을 불러왔어요';
+    };
+    r.readAsText(f, 'utf-8');
+  });
+
+  // Fisher-Yates 셔플
+  function shuffleArr(a) {
+    a = a.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
 
   let voices = [];
   let forcedLang = null; // 'en-GB'(영국) 또는 'en-US'(미국)
@@ -231,7 +270,10 @@
   }
 
   function start() {
-    const lines = textEl.value.split('\n').map(s => s.trim()).filter(s => s.length);
+    let lines = textEl.value.split('\n').map(s => s.trim()).filter(s => s.length);
+    if (shuffleEl.checked) lines = shuffleArr(lines);        // 랜덤 섞기
+    const lim = parseInt(limitEl.value, 10);
+    if (lim && lim > 0) lines = lines.slice(0, lim);         // 개수 제한
     sentences = []; trans = [];
     lines.forEach(line => {
       const parts = line.split('|');
@@ -266,10 +308,19 @@
   stopBtn.onclick = finish;
   totalEl.textContent = countEl.value;
 
-  // --- URL 파라미터로 문장/횟수 받기 (Claude 링크 연동용) ---
-  // 예: repeat-speaker.html?text=Hello&count=30&rate=1&gap=0.8&auto=1
-  (function () {
+  // --- URL 파라미터로 문장/설정 받기 (Claude 링크 연동용) ---
+  // 예: review.html?src=month.txt&shuffle=1&limit=20&count=10&auto=1&rate=1.2&lang=en-GB
+  //     또는 text=..&ko=.. 를 직접 나열
+  (async function () {
     const p = new URLSearchParams(location.search);
+
+    // src= : 같은 폴더의 문장 파일(.txt)을 불러옴
+    if (p.has('src')) {
+      try {
+        const res = await fetch(p.get('src'));
+        if (res.ok) textEl.value = (await res.text()).trim();
+      } catch (e) { /* 불러오기 실패 시 무시 */ }
+    }
     if (p.has('text')) {
       // text= 는 영어 문장, ko= 는 같은 순서의 한글 해석
       const en = p.getAll('text');
@@ -280,22 +331,34 @@
     if (p.has('rate'))  { rateEl.value = p.get('rate'); rateVal.textContent = parseFloat(p.get('rate')).toFixed(1) + 'x'; }
     if (p.has('gap'))   { gapEl.value = p.get('gap');  gapVal.textContent = parseFloat(p.get('gap')).toFixed(1) + '초'; }
     if (p.has('lang'))  { forcedLang = p.get('lang'); loadVoices(); } // en-GB(영국) / en-US(미국)
+    if (p.get('shuffle') === '1') shuffleEl.checked = true;           // 랜덤 섞기
+    if (p.has('limit')) limitEl.value = p.get('limit');              // 개수 제한
 
     // auto=1 이면 한 번만 탭하면 바로 시작하도록 안내 오버레이 표시
     // (모바일 브라우저는 사용자 탭 없이는 소리 재생을 막기 때문)
     if (p.get('auto') === '1') {
       const ov = document.createElement('div');
-      ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.96);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:99;text-align:center;padding:24px;';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.96);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:99;text-align:center;padding:24px;overflow:auto;';
       const lines = textEl.value.split('\n').map(s => s.trim()).filter(Boolean);
-      const listHtml = lines.map(l => {
-        const parts = l.split('|');
-        const en = '<div style="font-size:19px;font-weight:700;">' + esc(parts[0].trim()) + '</div>';
-        const ko = parts[1] ? '<div style="font-size:14px;font-weight:400;color:#94a3b8;">' + esc(parts[1].trim()) + '</div>' : '';
-        return '<div style="margin:6px 0;">' + en + ko + '</div>';
-      }).join('');
-      ov.innerHTML = '<div style="font-size:18px;color:#94a3b8;max-width:420px;">' +
-        (lines.length > 1 ? lines.length + '개 문장을 각각 ' : '아래 문장을 ') +
-        countEl.value + '회 반복합니다</div>' +
+      const lim = parseInt(limitEl.value, 10);
+      const eff = (lim && lim > 0) ? Math.min(lim, lines.length) : lines.length;
+      const shuf = shuffleEl.checked;
+      let head;
+      if (shuf) head = lines.length + '개 중 ' + eff + '개를 랜덤으로, 각 ' + countEl.value + '회 반복합니다';
+      else if (lim && lim < lines.length) head = lines.length + '개 중 앞 ' + eff + '개를, 각 ' + countEl.value + '회 반복합니다';
+      else head = eff + '개 문장을 각각 ' + countEl.value + '회 반복합니다';
+
+      // 문장이 적고 랜덤이 아니면 목록을 보여주고, 많거나 랜덤이면 요약만
+      let listHtml = '';
+      if (!shuf && lines.length <= 5) {
+        listHtml = lines.map(l => {
+          const parts = l.split('|');
+          const en = '<div style="font-size:19px;font-weight:700;">' + esc(parts[0].trim()) + '</div>';
+          const ko = parts[1] ? '<div style="font-size:14px;font-weight:400;color:#94a3b8;">' + esc(parts[1].trim()) + '</div>' : '';
+          return '<div style="margin:6px 0;">' + en + ko + '</div>';
+        }).join('');
+      }
+      ov.innerHTML = '<div style="font-size:18px;color:#94a3b8;max-width:440px;">' + head + '</div>' +
         '<div style="max-width:480px;line-height:1.5;">' + listHtml + '</div>' +
         '<button style="background:#6366f1;color:#fff;border:none;border-radius:14px;padding:18px 34px;font-size:20px;font-weight:800;cursor:pointer;">▶ 탭하여 시작</button>';
       ov.querySelector('button').onclick = () => { ov.remove(); start(); };
