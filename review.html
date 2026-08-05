@@ -110,7 +110,7 @@
     <div class="row mt">
       <div>
         <label for="count">문장당 반복 횟수</label>
-        <input type="number" id="count" min="1" max="999" value="10">
+        <input type="number" id="count" min="1" max="999" value="5">
       </div>
       <div>
         <label for="voice">음성</label>
@@ -156,7 +156,7 @@
 
   <div class="card progress">
     <div id="nowSentence" style="font-size:15px;color:#e2e8f0;margin-bottom:8px;min-height:20px;line-height:1.4;"></div>
-    <div class="count-big"><span id="done">0</span> / <span id="total">10</span></div>
+    <div class="count-big"><span id="done">0</span> / <span id="total">5</span></div>
     <div>현재 문장 반복</div>
     <div id="sentInfo" style="margin-top:6px;font-size:13px;color:#94a3b8;"></div>
     <div class="bar"><div id="barFill"></div></div>
@@ -211,8 +211,8 @@
   }
 
   let voices = [];
-  let forcedLang = null;        // 'en-GB'(영국) 또는 'en-US'(미국)
-  let preferredVoiceName = null; // 예: 'Google UK English Male'
+  let forcedLang = 'en-GB';                          // 기본: 영국 영어
+  let preferredVoiceName = 'Google UK English Male'; // 기본: 영국 남성 음성
   let running = false;
   let paused = false;
   let sentences = [];  // 영어 문장(읽는 것)
@@ -421,9 +421,9 @@
     if (p.get('balance') === '1') balanceEl.checked = true;           // 균형 모드
     if (p.has('limit')) limitEl.value = p.get('limit');              // 개수 제한
 
-    // auto=1 이면 한 번만 탭하면 바로 시작하도록 안내 오버레이 표시
+    // 기본 자동재생: 탭 한 번이면 시작하도록 안내 오버레이 표시 (auto=0 이면 끔)
     // (모바일 브라우저는 사용자 탭 없이는 소리 재생을 막기 때문)
-    if (p.get('auto') === '1') {
+    if (p.get('auto') !== '0') {
       const ov = document.createElement('div');
       ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.96);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:99;text-align:center;padding:24px;overflow:auto;';
       const lines = textEl.value.split('\n').map(s => s.trim()).filter(Boolean);
@@ -449,8 +449,10 @@
       }
       ov.innerHTML = '<div style="font-size:18px;color:#94a3b8;max-width:440px;">' + head + '</div>' +
         '<div style="max-width:480px;line-height:1.5;">' + listHtml + '</div>' +
-        '<button style="background:#6366f1;color:#fff;border:none;border-radius:14px;padding:18px 34px;font-size:20px;font-weight:800;cursor:pointer;">▶ 탭하여 시작</button>';
+        '<button style="background:#6366f1;color:#fff;border:none;border-radius:14px;padding:18px 34px;font-size:20px;font-weight:800;cursor:pointer;">▶ 탭하여 시작</button>' +
+        '<div id="ovCfg" style="margin-top:4px;color:#94a3b8;font-size:13px;text-decoration:underline;cursor:pointer;">먼저 설정 바꾸기</div>';
       ov.querySelector('button').onclick = () => { ov.remove(); start(); };
+      ov.querySelector('#ovCfg').onclick = () => ov.remove();
       document.body.appendChild(ov);
     }
   })();
